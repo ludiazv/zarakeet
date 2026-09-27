@@ -1,0 +1,9 @@
+; Import definitions for the Vulkan loader (vulkan-1.dll, shipped with GPU drivers).
+; Only the functions ggml-vulkan.cpp calls directly; everything else is resolved at
+; runtime through vkGetInstanceProcAddr. If linking reports another undefined vk*
+; symbol after a ggml bump, add it here.
+LIBRARY vulkan-1.dll
+EXPORTS
+vkCmdCopyBuffer
+vkGetInstanceProcAddr
+vkGetPhysicalDeviceFeatures2

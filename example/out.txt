@@ -1,0 +1,4 @@
+tdt-0.6b-v3-q4_k.gguf: Well, I don't wish to see it any more, observed Phoebe, turning away her eyes. It is certainly very like the old portrait.
+tdt-1.1b-q4_k.gguf: well i don't wish to see it any more observed phoebe turning away her eyes it is certainly very like the old portrait
+nemotron-3.5-asr-streaming-0.6b-q4_k.gguf: Well, I don't wish to see it any more, observed Phoebe, turning away her eyes. It is certainly very like the old portrait.
+nemotron-3.5-asr-streaming-0.6b-q4_k.gguf (stream): Well, I don't wish to see it any more, observed Phoebe, turning away her eyes. It is certainly very like the old portrait.

@@ -1,0 +1,6 @@
+.zig-cache/
+zig-out/
+zig-pkg/
+example/*.gguf
+example/*.gguf.part
+__pycache__/
