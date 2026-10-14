@@ -7,7 +7,7 @@ done the way they are, and what to do when something upstream changes.
 
 For **using** the library, read the [README](../README.md). For the history of
 how it was built, stage by stage, see [`WORKER_PLAN.md`](WORKER_PLAN.md). For
-Zig 0.16 API details and pitfalls we ran into, see [`zig-facts.md`](zig-facts.md).
+Zig API details and pitfalls we ran into, see [`zig-facts.md`](zig-facts.md) (0.16-era, with a 0.17 addendum).
 
 ---
 
@@ -73,7 +73,7 @@ zarakeet/
 ├── doc/
 │   ├── notes.md         this file
 │   ├── WORKER_PLAN.md   staged build plan + status (historical record)
-│   ├── zig-facts.md     Zig 0.16 API facts and pitfalls
+│   ├── zig-facts.md     Zig API facts and pitfalls (0.16-era + 0.17 addendum)
 │   ├── todo-metal.md    assessment of a possible Metal backend (not implemented)
 │   └── logo.svg, logo-icon.svg, logo-icon.png
 ├── LICENSE              MIT
@@ -83,7 +83,7 @@ zarakeet/
 Generated or fetched directories you'll see locally, all gitignored:
 - `.zig-cache/`: build cache.
 - `zig-out/`: installed artifacts.
-- `zig-pkg/`: fetched dependency sources. Zig 0.16 keeps them **inside the
+- `zig-pkg/`: fetched dependency sources. Zig keeps them **inside the
   project**. `example/cli/` gets its own copy, since it's a separate project.
 
 ---
@@ -226,7 +226,7 @@ faster.
 ### 4.4 Debug builds still optimize the C/C++
 
 ggml does pointer arithmetic on null pointers, which is legal in practice in C but
-trapped by Zig's Debug safety checks. Zig 0.16 can't turn safety off per module,
+trapped by Zig's Debug safety checks. Zig 0.17 can't turn safety off per module,
 so `build.zig` compiles **the upstream C/C++ with ReleaseFast whenever
 `-Doptimize=Debug`** (`c_optimize`). Only our Zig code gets Debug mode. That also
 avoids UBSan symbols ending up in the static library.
@@ -457,7 +457,7 @@ The right GPU path on a Mac would be ggml's Metal backend; its assessment is in
 - **A Python helper for the sweep only.** `sweep.py`, `download_models.py` and
   `fleurs_fetch.py` are developer tools and use only the standard library. The
   library build never needs Python.
-- **Zig 0.16 specifics** (the `std.Io` model, `main(init: std.process.Init)`,
+- **Zig specifics** (the `std.Io` model, `main(init: std.process.Init)`,
   the `build.zig.zon` format, and so on) are collected in
   [`zig-facts.md`](zig-facts.md).
 
@@ -541,11 +541,15 @@ newer headers, and older headers usually show up as compile errors in
 
 ### 8.4 Bumping Zig
 
-The build uses many 0.16-specific APIs: `std.Io`, the `Run` step's environment
+The build uses many 0.17-specific APIs: `std.Io`, the `Run` step's environment
 handling, `std.process.Init` and the `build.zig.zon` format. Read the release
 notes, then work through [`zig-facts.md`](zig-facts.md) section by section. Pay
 particular attention to cache hashing of run-step environments (§5.4), since a
-change there could silently bring back the shader-regeneration problem.
+change there could silently bring back the shader-regeneration problem. Since
+0.17, `build.zig` runs as a cached *configurer* process; any configure-time
+side effect (the glslc probes) must keep `b.graph.poisonCache()` honest, and
+configure-time paths must not use `LazyPath` (see the 0.17 addendum in
+`zig-facts.md`).
 
 ### 8.5 Supporting another model family
 

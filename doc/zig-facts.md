@@ -1,10 +1,11 @@
-# Zig 0.16 — facts and lessons learned (zarakeet project)
+# Zig 0.16/0.17 — facts and lessons learned (zarakeet project)
 
-Everything below was verified against the **Zig 0.16.0** toolchain at
-`~/.local/zig/zig` (std sources in `~/.local/zig/lib/std/`) while building
-zarakeet (stages 1–12 plus follow-ups). Line numbers refer to the 0.16.0
-std files and are a shortcut for re-verification; the API can change between
-Zig versions, so when in doubt, grep the real source before using an API.
+> **Migrated to Zig 0.17.0 (2026-10).** The body below was verified against
+> **0.16.0** and is kept as a historical record; where 0.17 changed an API the
+> project uses, the **0.17 addendum** at the end of this file has the verified
+> replacement. Line numbers refer to the 0.16.0 std files and are a shortcut
+> for re-verification; the API can change between Zig versions, so when in
+> doubt, grep the real source before using an API.
 
 ---
 
@@ -287,3 +288,95 @@ pub const Init = struct {
 18. `Child.Term` compared with `==` → it's a `union(enum)`; `switch` on it.
 19. Expecting `zig build` to exit with the child's code → it exits 1; run the binary directly to verify program exit codes.
 20. `std.debug.print` goes to **stderr** (fine for tests; don't use it for program stdout).
+
+---
+
+## 10. 0.17 addendum (verified against 0.17.0, 2026-07)
+
+The project was migrated from 0.16 to 0.17.0. Every item below was verified
+against the 0.17.0 std sources and by building/running this project.
+
+### 10.1 `std.Build` (build.zig)
+
+- **`b.args` is gone.** Args after `--` are no longer observable at configure
+  time. Use `run.addPassthruArgs()` on the run step instead of
+  `if (b.args) |args| run.addArgs(args);`. The step becomes always-uncached.
+- **`LazyPath.getPath3` is removed.** There is no configure-time path resolver
+  for lazy paths. For the glslc probes, `build.zig` uses the dependency's own
+  builder instead: `ggml_dep.builder.root` is the `Cache.Path` of the
+  directory the toolchain actually fetched ggml into, so
+  `ggml_dep.builder.root.joinString(gpa, "src/…")` works from any CWD, with
+  `ZIG_LOCAL_PKG_DIR`, and even when this package is built as a path
+  dependency (the fetch then lands in the *main* build's `zig-pkg/`, not
+  this package's own root — `b.root` points at the wrong directory there).
+  Note: a slice obtained from `b.available_deps` (anonymous-struct element)
+  cannot be used in a `"…" ++ hash` concat ("slice being concatenated must be
+  comptime-known" — a general Zig rule, not a 0.17 delta; the migration just
+  exposed it) — join through `Cache.Path` instead.
+- **`b.lazyDependency` is subsumed by `b.dependency`.** In 0.17, calling
+  `b.dependency` on an unfetched lazy dep exits the configure phase, the
+  toolchain fetches it, and build.zig re-runs (`serializeConfigurationExiting`
+  is `noreturn`). The `orelse @panic` guards are gone.
+- **`build.zig` now runs as a cached *configurer* process.** On a warm cache
+  the configurer is skipped entirely (warm `zig build` ≈ 0.04s). Any
+  configure-time side effect (process runs, PATH scans) must call
+  `b.graph.poisonCache()` or the build silently reuses stale configuration;
+  `zig build --cache-poison=disallowed` turns *any* poisoning into a hard
+  error (panic at the `poisonCache()` call site), including an explicit one —
+  so a build whose configurer re-runs and poisons always fails under that
+  flag. The Vulkan block poisons explicitly (it fails under the flag by
+  design); the default build is pure and passes it.
+- **`std.lang.Optimize` tags are lowercase**: `.debug`, `.fast`, `.safe`,
+  `.small` (uppercase `.Debug` etc. remain only as deprecated *const values*,
+  not enum members, so `switch` prongs and `==` break). `standardOptimizeOption`
+  still parses legacy spellings like `-Doptimize=ReleaseFast` at the CLI.
+- **`addOutputFileArg`/`addOutputDirectoryArg`/`addFileArg`/`addPrefixedFileArg`
+  are deprecated** in favor of `addOutputFileArg2(arg, opts)` /
+  `addOutputDirectoryArg2(name, opts)` / `addFileArg2(file, opts)` — the `*Arg2`
+  variants merge plain and prefixed forms (`addPrefixedFileArg("", x)` ≡
+  `addFileArg2(x, .{})`). The path variants (`addFileArg2`,
+  `addOutputFileArg2`, `addOutputDirectoryArg2`, `addDirectoryArg2`,
+  `addArtifactArg2`, `addDepFileOutputArg2`) take a `Run.PathArgOptions`
+  `{ prefix, suffix, make_absolute }`; only `addFileContentArg2` takes the
+  plain `Run.ArgOptions` `{ prefix, suffix }`.
+- **`--pkg-path` is gone**; the 0.17 flag is `--fork=[path]` (override one or
+  more projects from the dependency tree). `--system [pkgdir]` disables
+  fetching.
+- URL deps are still fetched into `zig-pkg/<hash>/` under the build root
+  (same as 0.16); `b.available_deps` lists `.{name, hash}` pairs.
+
+### 10.2 `std` library
+
+- **`std.mem.indexOf` is removed** → `std.mem.find(haystack, needle: []const T)`
+  (slice needle) or `std.mem.findScalar(haystack, needle: T)` (single element).
+- **`std.fmt.allocPrint` is removed** → `allocator.print(comptime fmt, args)`
+  (on `mem.Allocator`; `std.Io.Writer.print` for writers).
+- **`Allocator.dupeZ` is removed** → `allocator.dupeSentinel(T, m, sentinel)`
+  (the sentinel is now an explicit argument); likewise `allocSentinel`.
+- `std.math.cast` and `std.debug.panic` still exist in 0.17.0 (left unchanged
+  in the codebase).
+
+### 10.3 Behavior / tooling
+
+- **Test binaries are BSP servers**: `zig build test` runs them with
+  `--listen=-` and drives them over the build server protocol. Running a test
+  binary manually with `--listen=-` and no client on stdin panics with
+  `EndOfStream` — that is expected, not a bug.
+- **Known upstream bug #35202**: when the test child writes to stderr, a
+  stale `failed command: … --listen=-` line is printed even on success; exit
+  codes stay correct (verified: failing test → exit 1). Our
+  `load nonexistent` test triggers it via the C library's stderr line.
+- The `--listen=-` suffix on every command in `--verbose` output is a maker
+  display artifact; child argv is clean (verified with an argv-dumping
+  build).
+- **0.17.0 known regressions** (release notes): #37006 (compiler-rt soft-float
+  x86), #36986 (`std.debug.simple_panic` compile failure / weak libc
+  symbols), #36444 (maker/configurer separation breaks response-file use in
+  `Step.Run` — not used here), #37050 (SPIR-V backend).
+- **Run-step caching ignores the inherited environment.** `zig build test`
+  can replay a cached run even when env vars change (the model-gated tests
+  read `ZARAKEET_*` env vars). To force a re-run, clear `.zig-cache` (a
+  *failed* run step is not cached, so a failing run does re-run next time).
+- **ZLS does not work with 0.17.0** (per the migration reference).
+- `build.zig.zon` still requires `.fingerprint` (error prints the value to
+  use), and `zig fmt` now formats `.zon` files too.

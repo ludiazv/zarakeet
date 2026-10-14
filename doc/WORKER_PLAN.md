@@ -40,7 +40,7 @@ This plan now lives in `doc/WORKER_PLAN.md`. The technical reference for maintai
      - `example/fleurs/fleurs_fetch.py`
      None of them is part of the library. The benchmark is `example/bench/` (`zig build bench`, Stage 11); `example/cli/` is a standalone consumer project (Stage 12).
 3. **Never modify upstream sources.** parakeet.cpp and ggml come in as `build.zig.zon` dependencies and are compiled exactly as they are. Do not copy them into this repo.
-4. **Zig version is 0.16.0** (`~/.local/zig/zig`). The Zig standard library and build APIs change between versions, so **do not guess an API**. Before using one, check the real source:
+4. **Zig version is 0.17.0** (`~/.local/zig/zig`). The Zig standard library and build APIs change between versions, so **do not guess an API**. Before using one, check the real source:
    - `~/.local/zig/lib/std/Build.zig`
    - `~/.local/zig/lib/std/Build/Module.zig`
    - `~/.local/zig/lib/std/Build/Step/Compile.zig`
@@ -51,7 +51,7 @@ This plan now lives in `doc/WORKER_PLAN.md`. The technical reference for maintai
 5. **Stop and report** instead of improvising. Examples:
    - an upstream file listed here does not exist
    - a compile error seems to require changing upstream code
-   - an API in this doc does not exist in Zig 0.16
+   - an API in this doc does not exist in Zig 0.17
 
    When you stop, include the exact error output.
 6. Keep code small and plain, and match the naming used in this doc.
@@ -70,7 +70,7 @@ This plan now lives in `doc/WORKER_PLAN.md`. The technical reference for maintai
 | `vulkan_headers` (lazy) | `https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.364.tar.gz` | Pinned in Stage 8. |
 | `spirv_headers` (lazy) | `https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/vulkan-sdk-1.4.357.0.tar.gz` | Pinned in Stage 8. |
 
-Zig 0.16 stores fetched packages in `zig-pkg/` inside the project. That directory is gitignored.
+Zig stores fetched packages in `zig-pkg/` inside the project. That directory is gitignored.
 
 Other versions: ggml is `0.13.0`, and `PARAKEET_VERSION` is `"0.0.1"`.
 
@@ -135,7 +135,7 @@ zarakeet/
 │   ├── WORKER_PLAN.md # this file
 │   ├── notes.md       # technical notes for maintainers
 │   ├── todo-metal.md  # parked Metal assessment
-│   ├── zig-facts.md   # Zig 0.16 API facts and pitfalls
+│   ├── zig-facts.md   # Zig API facts and pitfalls (0.16-era + 0.17 addendum)
 │   └── logo.svg, logo-icon.svg, logo-icon.png  # project logo: geometric parakeet (full / icon / 512 px preview)
 ```
 
@@ -152,11 +152,11 @@ zarakeet/
 1. In `/home/ldiaz/projects/zarakeet`, create `build.zig.zon` by hand. Set:
    - `.name = .zarakeet`
    - `.version = "0.1.0"`
-   - `.minimum_zig_version = "0.16.0"`
+   - `.minimum_zig_version = "0.17.0"`
    - `.paths = .{ "build.zig", "build.zig.zon", "src", "README.md" }`
    - an empty `.dependencies = .{}`
 
-   Zig 0.16 requires a `.fingerprint` field. Run `zig build` once; the error message prints the value to use.
+   Zig 0.17 requires a `.fingerprint` field. Run `zig build` once; the error message prints the value to use.
 2. Add the two deps with `zig fetch --save=<name> <url>`, using the names and URLs from §1.1:
    - `zig fetch --save=parakeet_cpp <parakeet_cpp URL>`
    - `zig fetch --save=ggml <ggml URL>`
@@ -169,7 +169,7 @@ zarakeet/
 **Done when**
 - [ ] `zig build` exits 0.
 - [ ] `build.zig.zon` contains both deps with `.hash` values.
-- [ ] You checked that the fetched sources exist. Find them with `ls zig-pkg/` (Zig 0.16 keeps fetched packages inside the project), then confirm that `include/parakeet_capi.h` is in parakeet_cpp and `src/ggml.c` is in ggml.
+- [ ] You checked that the fetched sources exist. Find them with `ls zig-pkg/` (Zig keeps fetched packages inside the project), then confirm that `include/parakeet_capi.h` is in parakeet_cpp and `src/ggml.c` is in ggml.
 
 ---
 
@@ -510,7 +510,7 @@ pub fn stream(self: *Model, opts: Options) Error!Stream;
    - target: `b.graph.host`, optimize: ReleaseFast, link_libcpp
    - source: ggml `src/ggml-vulkan/vulkan-shaders/vulkan-shaders-gen.cpp`, `-std=c++17`
    - **Do not install it.**
-4. **Feature probes**, run at configure time and only when `vulkan` is true. For each pair below, run `glslc -o - -fshader-stage=compute --target-env=vulkan1.3 <ggml>/src/ggml-vulkan/vulkan-shaders/feature-tests/<file>` using `std.process.Child.run` (check its 0.16 signature first). If the command exits 0, define the macro on **both** `vulkan-shaders-gen` and the library module.
+4. **Feature probes**, run at configure time and only when `vulkan` is true. For each pair below, run `glslc -o - -fshader-stage=compute --target-env=vulkan1.3 <ggml>/src/ggml-vulkan/vulkan-shaders/feature-tests/<file>` using `std.process.Child.run` (check its 0.17 signature first). If the command exits 0, define the macro on **both** `vulkan-shaders-gen` and the library module.
 
    | file | macro |
    |---|---|
@@ -627,7 +627,7 @@ These went in after the original Stage 8. Keep them when you touch `build.zig`.
 3. In `src/root.zig`, add a private live-object counter: `var live = std.atomic.Value(u32).init(0);`
    - `Model.load` increments it after a successful load, and `Model.deinit` decrements it.
    - `Model.stream` increments it after a successful begin, and `Stream.deinit` decrements it.
-   - Use `.fetchAdd(1, .monotonic)` / `.fetchSub(1, .monotonic)`. Check the 0.16 `std.atomic.Value` API first.
+   - Use `.fetchAdd(1, .monotonic)` / `.fetchSub(1, .monotonic)`. Check the 0.17 `std.atomic.Value` API first.
 4. In `src/root.zig`, add these two public functions:
    ```zig
    /// Process-wide CPU thread count for all models (0 = parakeet default, 8).
@@ -674,7 +674,7 @@ These went in after the original Stage 8. Keep them when you touch `build.zig`.
 - **FLEURS clips:** the benchmark can also transcribe the multilingual clips in `example/fleurs/`, with an opt-in `--fleurs` flag.
 - **WER:** `sweep.py` computes and reports **word error rate (WER)** per model, language and configuration, and fails on grossly broken output.
 
-**Scope:** `build.zig` (only the example/bench step), `example/main.zig` → `example/bench/main.zig`, `example/sweep.py` → `example/bench/sweep.py`, `README.md`, and this file. Don't touch `src/` or the library build. Check Zig 0.16 APIs in `~/.local/zig/lib/std/` before using them.
+**Scope:** `build.zig` (only the example/bench step), `example/main.zig` → `example/bench/main.zig`, `example/sweep.py` → `example/bench/sweep.py`, `README.md`, and this file. Don't touch `src/` or the library build. Check Zig 0.17 APIs in `~/.local/zig/lib/std/` before using them.
 
 ### 11.1 Move the benchmark
 1. Move the files; the project isn't a git repository, so use a plain `mv`:
@@ -694,7 +694,7 @@ These went in after the original Stage 8. Keep them when you touch `build.zig`.
 4. Update every mention of `zig build example`, `example/main.zig` or `example/sweep.py` in `README.md` and this file. Find them with `grep -rn -E 'zig build example|example/main.zig|example/sweep.py' README.md WORKER_PLAN.md`.
 
 ### 11.2 `--fleurs` in the benchmark (`example/bench/main.zig`)
-1. Switch `main` to the Zig 0.16 entry point `pub fn main(init: std.process.Init) !void`. Read the args with `init.minimal.args.toSlice(init.arena.allocator())`, and use `init.io`. Keep `std.heap.page_allocator` for the model outputs, as today.
+1. Switch `main` to the Zig 0.17 entry point `pub fn main(init: std.process.Init) !void`. Read the args with `init.minimal.args.toSlice(init.arena.allocator())`, and use `init.io`. Keep `std.heap.page_allocator` for the model outputs, as today.
    - The only accepted argument is `--fleurs`.
    - Any other argument prints `usage: zarakeet-bench [--fleurs]` to stderr and exits with code 2.
 2. **Without `--fleurs`, the output must be byte-identical to today:** the 4 result lines, each followed by its timing line, plus the streaming partial lines and the events line.
@@ -765,7 +765,7 @@ These went in after the original Stage 8. Keep them when you touch `build.zig`.
 
 **Goal.** A minimal, **separate Zig project** that shows how a third party consumes zarakeet: a command-line tool, `zarakeet-cli <model.gguf> <file.wav>`, that transcribes the file **offline** with the given model and prints the text. It checks no results and does no timing or benchmarking.
 
-**Scope:** new files `example/cli/build.zig`, `example/cli/build.zig.zon` and `example/cli/src/main.zig`, plus `README.md` and this file. **Don't touch** the root `build.zig`: the CLI isn't part of the root build, and the root `zig build`/`test`/`bench` must not change. Check Zig 0.16 APIs before using them.
+**Scope:** new files `example/cli/build.zig`, `example/cli/build.zig.zon` and `example/cli/src/main.zig`, plus `README.md` and this file. **Don't touch** the root `build.zig`: the CLI isn't part of the root build, and the root `zig build`/`test`/`bench` must not change. Check Zig 0.17 APIs before using them.
 
 ### 12.1 `example/cli/build.zig.zon`
 ```zig
@@ -773,7 +773,7 @@ These went in after the original Stage 8. Keep them when you touch `build.zig`.
     .name = .zarakeet_cli,
     .version = "0.1.0",
     .fingerprint = 0x0, // replace with the value `zig build` prints on first run
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .paths = .{ "build.zig", "build.zig.zon", "src" },
     .dependencies = .{
         .zarakeet = .{ .path = "../.." },

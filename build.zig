@@ -6,8 +6,11 @@ pub fn build(b: *std.Build) void {
 
     const vulkan = b.option(bool, "vulkan", "Build the ggml Vulkan backend (requires glslc)") orelse false;
     const glslc = b.option([]const u8, "glslc", "Path to the glslc binary for Vulkan shader generation") orelse "glslc";
-    const vulkan_require_all = b.option(bool, "vulkan-require-all",
-        "Fail the build unless glslc supports every optional Vulkan shader feature (use for portable release builds)") orelse false;
+    const vulkan_require_all = b.option(
+        bool,
+        "vulkan-require-all",
+        "Fail the build unless glslc supports every optional Vulkan shader feature (use for portable release builds)",
+    ) orelse false;
 
     if (vulkan_require_all and !vulkan) std.process.fatal("-Dvulkan-require-all requires -Dvulkan=true", .{});
 
@@ -21,11 +24,11 @@ pub fn build(b: *std.Build) void {
 
     // Upstream ggml/parakeet C code performs null-pointer arithmetic (legal in
     // C, e.g. ggml_graph_nbytes walks from a null pointer to size a graph)
-    // that Zig's Debug safety checks reject at runtime, and 0.16 has no
-    // per-module no_safety. All Release* modes have safety off, so when the
-    // user requests Debug, build the frozen upstream C/C++ with ReleaseFast.
+    // that Zig's Debug safety checks reject at runtime, and 0.17 has no
+    // per-module no_safety. All release modes have safety off, so when the
+    // user requests Debug, build the frozen upstream C/C++ with .fast.
     const c_optimize = switch (optimize) {
-        .Debug => .ReleaseFast,
+        .debug => .fast,
         else => optimize,
     };
 
@@ -69,7 +72,7 @@ pub fn build(b: *std.Build) void {
             "src/ggml-cpu/ggml-cpu.c",
             "src/ggml-cpu/quants.c",
         },
-        .flags = &.{ "-std=c11" },
+        .flags = &.{"-std=c11"},
     });
 
     // ggml C++ sources.
@@ -96,7 +99,7 @@ pub fn build(b: *std.Build) void {
             "src/ggml-cpu/amx/mmq.cpp",
             "src/ggml-cpu/llamafile/sgemm.cpp",
         },
-        .flags = &.{ "-std=c++17" },
+        .flags = &.{"-std=c++17"},
     });
 
     // ggml arch-specific sources.
@@ -104,25 +107,25 @@ pub fn build(b: *std.Build) void {
         .x86_64 => {
             module.addCSourceFiles(.{
                 .root = ggml_dep.path(""),
-                .files = &.{ "src/ggml-cpu/arch/x86/quants.c" },
-                .flags = &.{ "-std=c11" },
+                .files = &.{"src/ggml-cpu/arch/x86/quants.c"},
+                .flags = &.{"-std=c11"},
             });
             module.addCSourceFiles(.{
                 .root = ggml_dep.path(""),
-                .files = &.{ "src/ggml-cpu/arch/x86/repack.cpp" },
-                .flags = &.{ "-std=c++17" },
+                .files = &.{"src/ggml-cpu/arch/x86/repack.cpp"},
+                .flags = &.{"-std=c++17"},
             });
         },
         .aarch64 => {
             module.addCSourceFiles(.{
                 .root = ggml_dep.path(""),
-                .files = &.{ "src/ggml-cpu/arch/arm/quants.c" },
-                .flags = &.{ "-std=c11" },
+                .files = &.{"src/ggml-cpu/arch/arm/quants.c"},
+                .flags = &.{"-std=c11"},
             });
             module.addCSourceFiles(.{
                 .root = ggml_dep.path(""),
-                .files = &.{ "src/ggml-cpu/arch/arm/repack.cpp" },
-                .flags = &.{ "-std=c++17" },
+                .files = &.{"src/ggml-cpu/arch/arm/repack.cpp"},
+                .flags = &.{"-std=c++17"},
             });
         },
         else => std.process.fatal("unsupported target CPU architecture '{s}' (supported: x86_64, aarch64)", .{@tagName(target.result.cpu.arch)}),
@@ -162,25 +165,33 @@ pub fn build(b: *std.Build) void {
             "src/search.cpp",
             "src/transcription.cpp",
         },
-        .flags = &.{ "-std=c++17" },
+        .flags = &.{"-std=c++17"},
     });
 
     // zarakeet shim: extern "C" wrappers for two pk:: functions that
     // parakeet_capi.h does not expose (src/shim.cpp, our repo).
     module.addCSourceFiles(.{
         .root = b.path("src"),
-        .files = &.{ "shim.cpp" },
-        .flags = &.{ "-std=c++17" },
+        .files = &.{"shim.cpp"},
+        .flags = &.{"-std=c++17"},
     });
 
     var vk_implib: ?std.Build.LazyPath = null;
 
     // Vulkan backend (opt-in via -Dvulkan=true).
     if (vulkan) {
-        const vulkan_headers_dep = b.lazyDependency("vulkan_headers", .{}) orelse
-            @panic("vulkan_headers dependency missing from build.zig.zon");
-        const spirv_headers_dep = b.lazyDependency("spirv_headers", .{}) orelse
-            @panic("spirv_headers dependency missing from build.zig.zon");
+        // The glslc probes below run processes and scan PATH at configure
+        // time; those side effects cannot be tracked by the configure cache,
+        // so poison it explicitly: build.zig re-runs on every `zig build`
+        // while -Dvulkan=true. Default (non-Vulkan) builds stay pure and
+        // their configuration is cached.
+        b.graph.poisonCache();
+
+        // 0.17's b.dependency handles lazy dependencies transparently: if
+        // one is not fetched yet, the configure phase exits, the toolchain
+        // fetches it, and build.zig is re-run.
+        const vulkan_headers_dep = b.dependency("vulkan_headers", .{});
+        const spirv_headers_dep = b.dependency("spirv_headers", .{});
 
         // Configure-time glslc feature probes (same command as upstream
         // CMake test_shader_extension_support): define the macro when glslc
@@ -189,6 +200,20 @@ pub fn build(b: *std.Build) void {
         defer io_instance.deinit();
         const io = io_instance.io();
         const gpa = std.heap.page_allocator;
+
+        // Configure-time path to the ggml sources. LazyPath.getPath3 was
+        // removed in 0.17, but a dependency's own builder exposes its real
+        // on-disk root: ggml_dep.builder.root is the directory the toolchain
+        // fetched ggml into (the main build's zig-pkg/<hash>/, a
+        // ZIG_LOCAL_PKG_DIR override, or a --fork= path), so this works from
+        // any CWD and even when this package is built as a path dependency
+        // (the fetch then lands in the main build's zig-pkg/).
+        const ggml_root = ggml_dep.builder.root;
+        const feature_tests_dir = ggml_root.joinString(gpa, "src/ggml-vulkan/vulkan-shaders/feature-tests") catch @panic("OOM");
+        std.Io.Dir.cwd().access(io, feature_tests_dir, .{}) catch |err| std.process.fatal(
+            "cannot find ggml feature-tests dir at {s} ({s}) — the ggml sources at that path are not a complete ggml tree",
+            .{ feature_tests_dir, @errorName(err) },
+        );
 
         // Resolve glslc to an absolute path. The per-shader steps run the
         // generator with a minimal environment, and the generator launches
@@ -200,7 +225,7 @@ pub fn build(b: *std.Build) void {
         // later, at link time, with thousands of undefined shader symbols.)
         // If -Dglslc has no '/', search the parent PATH; otherwise fail at
         // configure time.
-        const glslc_path: []const u8 = if (std.mem.indexOfScalar(u8, glslc, '/') != null)
+        const glslc_path: []const u8 = if (std.mem.findScalar(u8, glslc, '/') != null)
             glslc
         else blk: {
             var found: ?[]const u8 = null;
@@ -249,9 +274,7 @@ pub fn build(b: *std.Build) void {
         var missing = std.ArrayList([]const u8).empty;
         defer missing.deinit(gpa);
         for (feature_tests) |ft| {
-            const sub = std.fs.path.join(gpa, &.{ "src/ggml-vulkan/vulkan-shaders/feature-tests", ft.file }) catch @panic("OOM");
-            const cache_path = ggml_dep.path(sub).getPath3(b, null);
-            const test_path = cache_path.joinString(gpa, "") catch @panic("OOM");
+            const test_path = std.fs.path.join(gpa, &.{ feature_tests_dir, ft.file }) catch @panic("OOM");
             const argv = [_][]const u8{ glslc_path, "-o", "-", "-fshader-stage=compute", "--target-env=vulkan1.3", test_path };
             const result = std.process.run(gpa, io, .{ .argv = &argv }) catch |err| std.process.fatal(
                 "cannot run glslc ('{s}'): {s} — install glslc (shaderc) or pass -Dglslc=PATH",
@@ -290,15 +313,15 @@ pub fn build(b: *std.Build) void {
         // Host tool: vulkan-shaders-gen (built for the host, not installed).
         const gen_mod = b.createModule(.{
             .target = b.graph.host,
-            .optimize = .ReleaseFast,
+            .optimize = .fast,
             .link_libc = true,
             .link_libcpp = true,
         });
         for (macros.items) |m| gen_mod.addCMacro(m, "1");
         gen_mod.addCSourceFiles(.{
             .root = ggml_dep.path(""),
-            .files = &.{ "src/ggml-vulkan/vulkan-shaders/vulkan-shaders-gen.cpp" },
-            .flags = &.{ "-std=c++17" },
+            .files = &.{"src/ggml-vulkan/vulkan-shaders/vulkan-shaders-gen.cpp"},
+            .flags = &.{"-std=c++17"},
         });
         const gen_tool = b.addExecutable(.{
             .name = "vulkan-shaders-gen",
@@ -308,14 +331,14 @@ pub fn build(b: *std.Build) void {
         // Step 1: generate the shader header (header mode; no glslc runs).
         const gen_header = b.addRunArtifact(gen_tool);
         gen_header.addArg("--output-dir");
-        _ = gen_header.addOutputDirectoryArg("vulkan-shaders.spv");
+        _ = gen_header.addOutputDirectoryArg2("vulkan-shaders.spv", .{});
         gen_header.addArg("--target-hpp");
-        const hpp = gen_header.addOutputFileArg("ggml-vulkan-shaders.hpp");
+        const hpp = gen_header.addOutputFileArg2("ggml-vulkan-shaders.hpp", .{});
 
         // Step 2: one run step per .comp template (listed at configure time),
         // each generating the .cpp that embeds that template's shader bytes.
         const shaders_dir = ggml_dep.path("src/ggml-vulkan/vulkan-shaders");
-        const dir_path = shaders_dir.getPath3(b, null).joinString(gpa, "") catch @panic("OOM");
+        const dir_path = ggml_root.joinString(gpa, "src/ggml-vulkan/vulkan-shaders") catch @panic("OOM");
         const dir = std.Io.Dir.cwd().openDir(io, dir_path, .{ .iterate = true }) catch |err| std.debug.panic("failed to open vulkan-shaders dir: {s}", .{@errorName(err)});
         defer dir.close(io);
         var it = dir.iterate();
@@ -325,33 +348,33 @@ pub fn build(b: *std.Build) void {
             run.addArg("--glslc");
             run.addArg(glslc_path);
             run.addArg("--source");
-            run.addPrefixedFileArg("", shaders_dir.path(b, entry.name));
+            run.addFileArg2(shaders_dir.path(b, entry.name), .{});
             run.addArg("--output-dir");
-            _ = run.addOutputDirectoryArg("spv");
+            _ = run.addOutputDirectoryArg2("spv", .{});
             run.addArg("--target-hpp");
-            run.addPrefixedFileArg("", hpp);
+            run.addFileArg2(hpp, .{});
             run.addArg("--target-cpp");
             const cpp_name = std.mem.concat(gpa, u8, &.{ entry.name, ".cpp" }) catch @panic("OOM");
-            const cpp = run.addOutputFileArg(cpp_name);
+            const cpp = run.addOutputFileArg2(cpp_name, .{});
             // glslc writes this .d file only when it actually compiled a
             // shader. Declaring it as an output makes the step fail (instead
             // of caching a hollow .cpp) when glslc fails: the upstream
             // generator ignores glslc's exit status and exits 0 even when
             // glslc cannot run, leaving a .cpp with no embedded shader bytes.
             const d_name = std.mem.concat(gpa, u8, &.{ cpp_name, ".d" }) catch @panic("OOM");
-            _ = run.addOutputFileArg(d_name);
+            _ = run.addOutputFileArg2(d_name, .{});
             // Cache-only input: regenerates the shaders when glslc changes.
             // (No PATH: glslc is an absolute path, so execvp does no search.)
             run.clearEnvironment();
             run.setEnvironmentVariable("GLSLC_VERSION", glslc_version);
-            module.addCSourceFile(.{ .file = cpp, .flags = &.{ "-std=c++17" } });
+            module.addCSourceFile(.{ .file = cpp, .flags = &.{"-std=c++17"} });
         }
 
         // The Vulkan backend itself.
         module.addCSourceFiles(.{
             .root = ggml_dep.path(""),
-            .files = &.{ "src/ggml-vulkan/ggml-vulkan.cpp" },
-            .flags = &.{ "-std=c++17" },
+            .files = &.{"src/ggml-vulkan/ggml-vulkan.cpp"},
+            .flags = &.{"-std=c++17"},
         });
         module.addIncludePath(hpp.dirname());
         module.addIncludePath(vulkan_headers_dep.path("include"));
@@ -370,9 +393,9 @@ pub fn build(b: *std.Build) void {
                 else => unreachable, // already rejected by the arch switch above
             };
             const dlltool = b.addSystemCommand(&.{ b.graph.zig_exe, "dlltool", "-d" });
-            dlltool.addFileArg(b.path("src/vulkan-1.def"));
+            dlltool.addFileArg2(b.path("src/vulkan-1.def"), .{});
             dlltool.addArgs(&.{ "-m", machine, "-l" });
-            vk_implib = dlltool.addOutputFileArg("libvulkan-1.a");
+            vk_implib = dlltool.addOutputFileArg2("libvulkan-1.a", .{});
         }
 
         // The loader is linked on the consumer modules below, not on this
@@ -438,6 +461,8 @@ pub fn build(b: *std.Build) void {
         .root_module = bench_mod,
     });
     const run_bench = b.addRunArtifact(bench_exe);
-    if (b.args) |args| run_bench.addArgs(args);
+    // 0.17: b.args is gone; passthru args are no longer observable at
+    // configure time. This makes the step uncached (it always runs).
+    run_bench.addPassthruArgs();
     b.step("bench", "Build and run the benchmark (example/bench)").dependOn(&run_bench.step);
 }

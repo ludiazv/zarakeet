@@ -57,13 +57,11 @@ pub fn main(init: std.process.Init) !void {
         const trans_secs = secs(t1.durationTo(t2));
         const rtf = trans_secs / audio_secs;
 
-        const line = try std.fmt.allocPrint(gpa, "{s}: {s}\n", .{ std.fs.path.basename(model_path), text });
+        const line = try gpa.print("{s}: {s}\n", .{ std.fs.path.basename(model_path), text });
         gpa.free(text);
         try std.Io.File.writeStreamingAll(stdout, io, line);
         gpa.free(line);
-        const perf = try std.fmt.allocPrint(gpa,
-            "  load {d:.3}s | transcribe {d:.3}s for {d:.2}s audio | RTF {d:.3} ({d:.1}x faster than real-time)\n",
-            .{ load_secs, trans_secs, audio_secs, rtf, audio_secs / trans_secs });
+        const perf = try gpa.print("  load {d:.3}s | transcribe {d:.3}s for {d:.2}s audio | RTF {d:.3} ({d:.1}x faster than real-time)\n", .{ load_secs, trans_secs, audio_secs, rtf, audio_secs / trans_secs });
         try std.Io.File.writeStreamingAll(stdout, io, perf);
         gpa.free(perf);
     }
@@ -86,7 +84,7 @@ pub fn main(init: std.process.Init) !void {
         const c1 = std.Io.Clock.Timestamp.now(io, .boot);
         trans_secs += secs(c0.durationTo(c1));
         if (piece.len > 0) {
-            const line = try std.fmt.allocPrint(gpa, "  [{d:.1}s] +\"{s}\"\n", .{ @as(f64, @floatFromInt(end)) / 16000.0, piece });
+            const line = try gpa.print("  [{d:.1}s] +\"{s}\"\n", .{ @as(f64, @floatFromInt(end)) / 16000.0, piece });
             try std.Io.File.writeStreamingAll(stdout, io, line);
             gpa.free(line);
         }
@@ -98,7 +96,7 @@ pub fn main(init: std.process.Init) !void {
     const c1 = std.Io.Clock.Timestamp.now(io, .boot);
     trans_secs += secs(c0.durationTo(c1));
     if (final.len > 0) {
-        const line = try std.fmt.allocPrint(gpa, "  [{d:.1}s] +\"{s}\"\n", .{ audio_secs, final });
+        const line = try gpa.print("  [{d:.1}s] +\"{s}\"\n", .{ audio_secs, final });
         try std.Io.File.writeStreamingAll(stdout, io, line);
         gpa.free(line);
     }
@@ -108,17 +106,15 @@ pub fn main(init: std.process.Init) !void {
     const load_secs = secs(t0.durationTo(t1));
     const rtf = trans_secs / audio_secs;
 
-    const line = try std.fmt.allocPrint(gpa, "{s} (stream): {s}\n", .{ std.fs.path.basename(nemotron), combined.items });
+    const line = try gpa.print("{s} (stream): {s}\n", .{ std.fs.path.basename(nemotron), combined.items });
     try std.Io.File.writeStreamingAll(stdout, io, line);
     gpa.free(line);
-    const perf = try std.fmt.allocPrint(gpa,
-        "  load {d:.3}s | transcribe {d:.3}s for {d:.2}s audio | RTF {d:.3} ({d:.1}x faster than real-time)\n",
-        .{ load_secs, trans_secs, audio_secs, rtf, audio_secs / trans_secs });
+    const perf = try gpa.print("  load {d:.3}s | transcribe {d:.3}s for {d:.2}s audio | RTF {d:.3} ({d:.1}x faster than real-time)\n", .{ load_secs, trans_secs, audio_secs, rtf, audio_secs / trans_secs });
     try std.Io.File.writeStreamingAll(stdout, io, perf);
     gpa.free(perf);
 
     const events = try stream.drainEvents(gpa);
-    const evline = try std.fmt.allocPrint(gpa, "  eou/eob events: {d}\n", .{events.len});
+    const evline = try gpa.print("  eou/eob events: {d}\n", .{events.len});
     try std.Io.File.writeStreamingAll(stdout, io, evline);
     gpa.free(evline);
     gpa.free(events);
@@ -148,12 +144,12 @@ pub fn main(init: std.process.Init) !void {
                 if (row.len == 0) continue;
                 const file = std.mem.sliceTo(row, '\t');
                 const joined = try std.fs.path.join(gpa, &.{ "example/fleurs", file });
-                const wav_path: [:0]const u8 = try gpa.dupeZ(u8, joined);
+                const wav_path: [:0]const u8 = try gpa.dupeSentinel(u8, joined, 0);
                 gpa.free(joined);
                 defer gpa.free(wav_path);
                 const text = try m.transcribeFile(gpa, wav_path, .{});
                 defer gpa.free(text);
-                const out = try std.fmt.allocPrint(gpa, "FLEURS\t{s}\t{s}\t{s}\n", .{ std.fs.path.basename(model_path), file, text });
+                const out = try gpa.print("FLEURS\t{s}\t{s}\t{s}\n", .{ std.fs.path.basename(model_path), file, text });
                 try std.Io.File.writeStreamingAll(stdout, io, out);
                 gpa.free(out);
             }

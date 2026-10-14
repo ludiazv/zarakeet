@@ -20,7 +20,7 @@ recorded in doc/WORKER_PLAN.md section 1.3. Any clip whose WER is above
 --max-wer (default 0.5) fails the sweep, as does a missing (model, clip)
 pair.
 
-Zig 0.16 names: "portable" is spelled "baseline"; the microarchitecture
+Zig 0.17 names: "portable" is spelled "baseline"; the microarchitecture
 levels are "x86_64_v3" / "x86_64_v4". The "vulkan+..." configurations
 add -Dvulkan=true: they need glslc at build time and libvulkan.so.1 plus
 a Vulkan driver at runtime, and transcribe on the GPU (the -Dcpu level

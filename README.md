@@ -27,7 +27,7 @@ C++ compiler, no prebuilt binaries.
 
 ## Quick start
 
-**Requirements:** [Zig 0.16](https://ziglang.org/download/). For GPU builds you
+**Requirements:** [Zig 0.17](https://ziglang.org/download/). For GPU builds you
 also need `glslc`, the Vulkan shader compiler (Debian/Ubuntu package `glslc`,
 Arch `shaderc`, or any Vulkan SDK).
 
@@ -351,7 +351,7 @@ CC BY 4.0 (see [Credits](#credits)).
 
 - [`doc/notes.md`](doc/notes.md): how zarakeet is built and organized, and how
   to maintain it (with the most detail on the Vulkan build).
-- [`doc/zig-facts.md`](doc/zig-facts.md): Zig 0.16 notes and pitfalls.
+- [`doc/zig-facts.md`](doc/zig-facts.md): Zig notes and pitfalls (0.16-era, with a 0.17 addendum).
 
 <sub>The logo is a green geometric parakeet, the "keet" in zarakeet, drawn in Zig's
 slanted, low-poly style. Its Zig-orange beak speaks a waveform, it perches on a

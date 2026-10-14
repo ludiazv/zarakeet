@@ -24,9 +24,9 @@ pub fn main(init: std.process.Init) !void {
     var model = zarakeet.Model.load(model_path) catch |err| {
         const stderr = std.Io.File.stderr();
         const msg = if (err == error.UnsupportedModel)
-            try std.fmt.allocPrint(init.arena.allocator(), "error: unsupported model '{s}' (supported: TDT models and nemotron-3.5-asr-streaming-0.6b)\n", .{model_path})
+            try init.arena.allocator().print("error: unsupported model '{s}' (supported: TDT models and nemotron-3.5-asr-streaming-0.6b)\n", .{model_path})
         else
-            try std.fmt.allocPrint(init.arena.allocator(), "error: cannot load model '{s}'\n", .{model_path});
+            try init.arena.allocator().print("error: cannot load model '{s}'\n", .{model_path});
         try std.Io.File.writeStreamingAll(stderr, init.io, msg);
         std.process.exit(1);
     };
@@ -35,7 +35,7 @@ pub fn main(init: std.process.Init) !void {
     const text = model.transcribeFile(init.gpa, wav_path, .{}) catch |err| {
         if (err == error.TranscribeFailed) {
             const stderr = std.Io.File.stderr();
-            const msg = try std.fmt.allocPrint(init.arena.allocator(), "error: transcription failed: {s}\n", .{model.lastError()});
+            const msg = try init.arena.allocator().print("error: transcription failed: {s}\n", .{model.lastError()});
             try std.Io.File.writeStreamingAll(stderr, init.io, msg);
             std.process.exit(1);
         }

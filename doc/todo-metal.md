@@ -52,7 +52,7 @@ Based on the pinned sources: parakeet.cpp `e75de9b`, ggml `e705c5f`.
   - Objective-C: `ggml-metal-device.m`, `ggml-metal-context.m`. Zig's clang compiles `.m` files. The code does manual retain/release, so **no `-fobjc-arc`** (upstream doesn't set it either).
   - the generated `.s` stub from step 2
 - **Defines:** `GGML_USE_METAL` (so `ggml-backend-reg.cpp` registers the backend), `GGML_METAL_EMBED_LIBRARY`, and optionally `GGML_METAL_NDEBUG`.
-- **Frameworks:** `Foundation`, `Metal` and `MetalKit`. Link them on the **consumer modules** (test, `zarakeet`, example) with `linkFramework`, not on the static library. That mirrors how Vulkan links `vulkan` / `vulkan-1`. Verify the 0.16 API name (`Module.linkFramework`) first.
+- **Frameworks:** `Foundation`, `Metal` and `MetalKit`. Link them on the **consumer modules** (test, `zarakeet`, example) with `linkFramework`, not on the static library. That mirrors how Vulkan links `vulkan` / `vulkan-1`. Verify the 0.17 API name (`Module.linkFramework`) first.
 
 ### 4. Apply the Metal patches: use a patched ggml fork (recommended)
 - **What the patches do.** Both only add ops to what Metal supports:

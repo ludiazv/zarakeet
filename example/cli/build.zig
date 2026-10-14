@@ -23,6 +23,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);
-    if (b.args) |args| run.addArgs(args);
+    // 0.17: b.args is gone; passthru args are no longer observable at
+    // configure time. This makes the step uncached (it always runs).
+    run.addPassthruArgs();
     b.step("run", "Run zarakeet-cli").dependOn(&run.step);
 }

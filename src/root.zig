@@ -194,7 +194,7 @@ pub fn shutdown() void {
 /// Plain-text cleanup state. Offline calls use a fresh one; a Stream keeps one
 /// across feed()/finalize() so whitespace is also clean across chunk boundaries.
 const Clean = struct {
-    started: bool = false,       // a non-space char has been emitted
+    started: bool = false, // a non-space char has been emitted
     pending_space: bool = false, // a space is owed before the next non-space char
 };
 
@@ -481,7 +481,7 @@ test "cleanText stream sequence" {
         if (out.len > 0) {
             try std.testing.expect(out[out.len - 1] != ' ');
         }
-        try std.testing.expect(std.mem.indexOf(u8, out, "  ") == null);
+        try std.testing.expect(std.mem.find(u8, out, "  ") == null);
         try combined.appendSlice(allocator, out);
     }
     const final = try cleanText(allocator, "", &st, true);
@@ -577,12 +577,12 @@ test "tdt integration" {
     const pcm_json = try model.transcribePcmJson(allocator, pcm, 16000, .{});
     defer allocator.free(pcm_json);
     try std.testing.expect(pcm_json.len > 0 and pcm_json[0] == '{');
-    try std.testing.expect(std.mem.indexOf(u8, pcm_json, "\"words\"") != null);
+    try std.testing.expect(std.mem.find(u8, pcm_json, "\"words\"") != null);
 
     // transcribeFileJson contains "words".
     const file_json = try model.transcribeFileJson(allocator, wav_path);
     defer allocator.free(file_json);
-    try std.testing.expect(std.mem.indexOf(u8, file_json, "\"words\"") != null);
+    try std.testing.expect(std.mem.find(u8, file_json, "\"words\"") != null);
 
     // A TDT model is not a streaming model.
     const stream_err = model.stream(.{}) catch |e| e;
@@ -607,13 +607,11 @@ test "nemotron integration" {
     const text = try model.transcribeFile(allocator, wav_path, .{ .lang = "en" });
     defer allocator.free(text);
     try std.testing.expect(text.len > 0);
-    try std.testing.expect(std.mem.indexOf(u8, text, "<") == null);
-    try std.testing.expect(std.mem.indexOf(u8, text, "  ") == null);
+    try std.testing.expect(std.mem.findScalar(u8, text, '<') == null);
+    try std.testing.expect(std.mem.find(u8, text, "  ") == null);
     try std.testing.expect(text[0] != ' ');
     try std.testing.expect(text[text.len - 1] != ' ');
-    try std.testing.expectEqualStrings(
-        "Well, I don't wish to see it any more, observed Phoebe, turning away her eyes. It is certainly very like the old portrait.",
-        text);
+    try std.testing.expectEqualStrings("Well, I don't wish to see it any more, observed Phoebe, turning away her eyes. It is certainly very like the old portrait.", text);
 
     // Streaming: feed in 1600-sample chunks, concatenate feed + finalize.
     var stream = try model.stream(.{ .lang = "en" });
@@ -635,8 +633,8 @@ test "nemotron integration" {
 
     // The concatenated stream text is clean too, and equals the offline text.
     // Holds for this clip; upstream emits the same sentences per path.
-    try std.testing.expect(std.mem.indexOf(u8, combined.items, "<") == null);
-    try std.testing.expect(std.mem.indexOf(u8, combined.items, "  ") == null);
+    try std.testing.expect(std.mem.findScalar(u8, combined.items, '<') == null);
+    try std.testing.expect(std.mem.find(u8, combined.items, "  ") == null);
     try std.testing.expect(combined.items[0] != ' ');
     try std.testing.expect(combined.items[combined.items.len - 1] != ' ');
     try std.testing.expectEqualStrings(text, combined.items);
@@ -656,7 +654,7 @@ test "nemotron integration" {
     while (offset < pcm.len) : (offset += chunk) {
         const end = @min(offset + chunk, pcm.len);
         const piece = try jstream.feedJson(allocator, pcm[offset..end]);
-        if (std.mem.indexOf(u8, piece, "<en-US>") != null) {
+        if (std.mem.find(u8, piece, "<en-US>") != null) {
             saw_tag = true;
             if (!printed) {
                 printed = true;
